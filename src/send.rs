@@ -6,9 +6,7 @@ use imap_codec::{
     imap_types::command::Command,
     CommandCodec,
 };
-use tokio::io::AsyncWriteExt;
-
-use crate::stream::Stream;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 
 pub struct SendCommandState<K> {
     codec: CommandCodec,
@@ -61,7 +59,10 @@ impl<K> SendCommandState<K> {
         literal_progress.received_continue = true;
     }
 
-    pub async fn progress(&mut self, stream: &mut Stream) -> Result<Option<K>, tokio::io::Error> {
+    pub async fn progress<S>(&mut self, stream: &mut S) -> Result<Option<K>, tokio::io::Error>
+    where
+        S: AsyncRead + AsyncWrite + Send + Unpin,
+    {
         let progress = match self.send_progress.take() {
             Some(progress) => {
                 // We are currently sending a command to the server. This sending process was
@@ -95,10 +96,7 @@ impl<K> SendCommandState<K> {
                 progress.next_literal = Some(literal_progress);
 
                 // Make sure that the line before the literal is sent completely to the server
-                stream
-                    .write_mut()
-                    .write_all_buf(&mut self.write_buffer)
-                    .await?;
+                stream.write_all_buf(&mut self.write_buffer).await?;
 
                 return Ok(None);
             }
@@ -128,10 +126,7 @@ impl<K> SendCommandState<K> {
         };
 
         // Send the bytes of the command to the server
-        stream
-            .write_mut()
-            .write_all_buf(&mut self.write_buffer)
-            .await?;
+        stream.write_all_buf(&mut self.write_buffer).await?;
 
         if need_continue {
             Ok(None)
@@ -194,7 +189,10 @@ impl<C: Encoder, K> SendResponseState<C, K> {
         self.write_buffer
     }
 
-    pub async fn progress(&mut self, stream: &mut Stream) -> Result<Option<K>, tokio::io::Error> {
+    pub async fn progress<S>(&mut self, stream: &mut S) -> Result<Option<K>, tokio::io::Error>
+    where
+        S: AsyncRead + AsyncWrite + Send + Unpin,
+    {
         let send_in_progress_key = match self.send_in_progress_key.take() {
             Some(key) => {
                 // We are currently sending a response. This sending process was
@@ -223,10 +221,7 @@ impl<C: Encoder, K> SendResponseState<C, K> {
         self.send_in_progress_key = Some(send_in_progress_key);
 
         // Send all bytes of current response
-        stream
-            .write_mut()
-            .write_all_buf(&mut self.write_buffer)
-            .await?;
+        stream.write_all_buf(&mut self.write_buffer).await?;
 
         // response was sent completely
         Ok(self.send_in_progress_key.take())

@@ -10,11 +10,11 @@ use imap_codec::{
     CommandCodec, GreetingCodec, ResponseCodec,
 };
 use thiserror::Error;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     receive::{ReceiveEvent, ReceiveState},
     send::SendCommandState,
-    stream::Stream,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -31,17 +31,20 @@ impl Default for ClientFlowOptions {
     }
 }
 
-pub struct ClientFlow {
-    stream: Stream,
+pub struct ClientFlow<S> {
+    stream: S,
 
     next_command_handle: ClientFlowCommandHandle,
     send_command_state: SendCommandState<(Tag<'static>, ClientFlowCommandHandle)>,
     receive_response_state: ReceiveState<ResponseCodec>,
 }
 
-impl ClientFlow {
+impl<S> ClientFlow<S>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin,
+{
     pub async fn receive_greeting(
-        mut stream: Stream,
+        mut stream: S,
         options: ClientFlowOptions,
     ) -> Result<(Self, Greeting<'static>), ClientFlowError> {
         // Receive greeting
@@ -81,11 +84,11 @@ impl ClientFlow {
         Ok((client_flow, greeting))
     }
 
-    pub fn stream(&self) -> &Stream {
+    pub fn stream(&self) -> &S {
         &self.stream
     }
 
-    pub fn stream_mut(&mut self) -> &mut Stream {
+    pub fn stream_mut(&mut self) -> &mut S {
         &mut self.stream
     }
 

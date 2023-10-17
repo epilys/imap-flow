@@ -1,9 +1,7 @@
 use bounded_static::IntoBoundedStatic;
 use bytes::{Buf, BytesMut};
 use imap_codec::decode::Decoder;
-use tokio::io::AsyncReadExt;
-
-use crate::stream::Stream;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
 pub struct ReceiveState<C: Decoder> {
     codec: C,
@@ -50,13 +48,11 @@ impl<C: Decoder> ReceiveState<C> {
         self.read_buffer
     }
 
-    pub async fn progress(
-        &mut self,
-        stream: &mut Stream,
-    ) -> Result<ReceiveEvent<C>, tokio::io::Error>
+    pub async fn progress<S>(&mut self, stream: &mut S) -> Result<ReceiveEvent<C>, tokio::io::Error>
     where
         for<'a> C::Message<'a>: IntoBoundedStatic<Static = C::Message<'static>>,
         for<'a> C::Error<'a>: IntoBoundedStatic<Static = C::Error<'static>>,
+        S: AsyncRead + AsyncWrite + Send + Unpin,
     {
         loop {
             match self.next_fragment {
@@ -72,13 +68,14 @@ impl<C: Decoder> ReceiveState<C> {
         }
     }
 
-    async fn progress_line(
+    async fn progress_line<S>(
         &mut self,
-        stream: &mut Stream,
+        stream: &mut S,
     ) -> Result<Option<ReceiveEvent<C>>, tokio::io::Error>
     where
         for<'a> C::Message<'a>: IntoBoundedStatic<Static = C::Message<'static>>,
         for<'a> C::Error<'a>: IntoBoundedStatic<Static = C::Error<'static>>,
+        S: AsyncRead + AsyncWrite + Send + Unpin,
     {
         // TODO: If the line is really long and we need multiple attempts to receive it, then this is O(n^2).
         //       This could be fixed by setting seen bytes in the None case
@@ -86,7 +83,7 @@ impl<C: Decoder> ReceiveState<C> {
             Some(crlf_result) => crlf_result,
             None => {
                 // No full line received yet, more data needed.
-                stream.read_mut().read_buf(&mut self.read_buffer).await?;
+                stream.read_buf(&mut self.read_buffer).await?;
                 return Ok(None);
             }
         };
@@ -110,16 +107,19 @@ impl<C: Decoder> ReceiveState<C> {
         }
     }
 
-    async fn progress_literal(
+    async fn progress_literal<S>(
         &mut self,
-        stream: &mut Stream,
+        stream: &mut S,
         literal_length: u32,
-    ) -> Result<(), tokio::io::Error> {
+    ) -> Result<(), tokio::io::Error>
+    where
+        S: AsyncRead + AsyncWrite + Send + Unpin,
+    {
         let unseen_bytes = self.read_buffer.len() - self.seen_bytes;
 
         if unseen_bytes < literal_length as usize {
             // We did not receive enough bytes for the literal yet.
-            stream.read_mut().read_buf(&mut self.read_buffer).await?;
+            stream.read_buf(&mut self.read_buffer).await?;
         } else {
             // We received enough bytes for the literal.
             // Now we can continue reading the next line.

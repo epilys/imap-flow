@@ -8,11 +8,11 @@ use imap_codec::{
     CommandCodec, GreetingCodec, ResponseCodec,
 };
 use thiserror::Error;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     receive::{ReceiveEvent, ReceiveState},
     send::SendResponseState,
-    stream::Stream,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,8 +32,8 @@ impl Default for ServerFlowOptions {
     }
 }
 
-pub struct ServerFlow {
-    stream: Stream,
+pub struct ServerFlow<S> {
+    stream: S,
     max_literal_size: u32,
 
     next_response_handle: ServerFlowResponseHandle,
@@ -41,9 +41,12 @@ pub struct ServerFlow {
     receive_command_state: ReceiveState<CommandCodec>,
 }
 
-impl ServerFlow {
+impl<S> ServerFlow<S>
+where
+    S: AsyncRead + AsyncWrite + Send + Unpin,
+{
     pub async fn send_greeting(
-        mut stream: Stream,
+        mut stream: S,
         options: ServerFlowOptions,
         greeting: Greeting<'_>,
     ) -> Result<Self, ServerFlowError> {
@@ -71,11 +74,11 @@ impl ServerFlow {
         Ok(server_flow)
     }
 
-    pub fn stream(&self) -> &Stream {
+    pub fn stream(&self) -> &S {
         &self.stream
     }
 
-    pub fn stream_mut(&mut self) -> &mut Stream {
+    pub fn stream_mut(&mut self) -> &mut S {
         &mut self.stream
     }
 
