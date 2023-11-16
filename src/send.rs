@@ -217,11 +217,6 @@ where
         self.send_queue.push_back(entry);
     }
 
-    pub fn finish(mut self) -> BytesMut {
-        self.write_buffer.clear();
-        self.write_buffer
-    }
-
     pub async fn progress(
         &mut self,
         stream: &mut AnyStream,
@@ -265,6 +260,11 @@ where
             .send_progress
             .take()
             .map(|progress| (progress.key, progress.response)))
+    }
+
+    pub fn finish(mut self) -> BytesMut {
+        self.write_buffer.clear();
+        self.write_buffer
     }
 }
 
