@@ -97,7 +97,7 @@ impl ClientFlow {
     /// enqueued.
     pub fn enqueue_command(&mut self, command: Command<'static>) -> ClientFlowCommandHandle {
         let handle = self.handle_generator.generate();
-        self.send_command_state.enqueue(handle, command);
+        self.send_command_state.enqueue_command(handle, command);
         handle
     }
 

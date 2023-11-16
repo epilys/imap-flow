@@ -32,7 +32,7 @@ impl<K> SendCommandState<K> {
         }
     }
 
-    pub fn enqueue(&mut self, key: K, command: Command<'static>) {
+    pub fn enqueue_command(&mut self, key: K, command: Command<'static>) {
         let fragments = self.codec.encode(&command).collect();
         let entry = SendCommandQueueEntry {
             key,
