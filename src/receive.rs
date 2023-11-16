@@ -30,27 +30,6 @@ impl<C: Decoder> ReceiveState<C> {
         }
     }
 
-    pub fn start_literal(&mut self, length: u32) {
-        self.next_fragment = NextFragment::Literal { length };
-        self.read_buffer.reserve(length as usize);
-    }
-
-    pub fn finish_message(&mut self) {
-        self.read_buffer.advance(self.seen_bytes);
-        self.seen_bytes = 0;
-        self.next_fragment = NextFragment::default();
-    }
-
-    pub fn discard_message(&mut self) -> Box<[u8]> {
-        let discarded_bytes = self.read_buffer[..self.seen_bytes].into();
-        self.finish_message();
-        discarded_bytes
-    }
-
-    pub fn finish(self) -> BytesMut {
-        self.read_buffer
-    }
-
     pub async fn progress(
         &mut self,
         stream: &mut AnyStream,
@@ -129,6 +108,27 @@ impl<C: Decoder> ReceiveState<C> {
         }
 
         Ok(())
+    }
+
+    pub fn start_literal(&mut self, length: u32) {
+        self.next_fragment = NextFragment::Literal { length };
+        self.read_buffer.reserve(length as usize);
+    }
+
+    pub fn finish_message(&mut self) {
+        self.read_buffer.advance(self.seen_bytes);
+        self.seen_bytes = 0;
+        self.next_fragment = NextFragment::default();
+    }
+
+    pub fn discard_message(&mut self) -> Box<[u8]> {
+        let discarded_bytes = self.read_buffer[..self.seen_bytes].into();
+        self.finish_message();
+        discarded_bytes
+    }
+
+    pub fn finish(self) -> BytesMut {
+        self.read_buffer
     }
 }
 
