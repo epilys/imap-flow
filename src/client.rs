@@ -124,11 +124,11 @@ impl ClientFlow {
         handle
     }
 
-    pub fn read(&mut self, reader: &mut dyn Read) {
+    pub fn read(&mut self, buffer: &mut BytesMut) {
         todo!()
     }
 
-    pub fn write(&mut self, writer: &mut dyn Write) {
+    pub fn write(&mut self, buffer: &mut BytesMut) {
         todo!()
     }
 
@@ -329,7 +329,7 @@ impl Debug for ClientFlowCommandHandle {
 #[derive(Debug)]
 pub enum ClientFlowAction {
     ReadBytes,
-    SendBytes,
+    WriteBytes,
     HandleEvent(ClientFlowEvent),
 }
 
