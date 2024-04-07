@@ -41,6 +41,7 @@ impl Default for ClientFlowOptions {
 }
 
 pub struct ClientFlow {
+    stream: AnyStream,
     handle_generator: HandleGenerator<ClientFlowCommandHandle>,
     send_command_state: SendCommandState,
     receive_response_state: ReceiveState<ResponseCodec>,
@@ -151,128 +152,131 @@ impl ClientFlow {
         // able to transfer all bytes soon.
         //
         // Therefore we prefer the second approach and begin with sending the commands.
-        loop {
-            if let Some(event) = self.progress_send().await? {
-                return Ok(event);
-            }
+        // loop {
+        //     if let Some(event) = self.progress_send().await? {
+        //         return Ok(event);
+        //     }
 
-            if let Some(event) = self.progress_receive().await? {
-                return Ok(event);
-            }
-        }
+        //     if let Some(event) = self.progress_receive().await? {
+        //         return Ok(event);
+        //     }
+        // }
+        todo!()
     }
 
     async fn progress_send(&mut self) -> Result<Option<ClientFlowEvent>, ClientFlowError> {
-        match self.send_command_state.progress(&mut self.stream).await? {
-            Some(SendCommandEvent::Command { handle, command }) => {
-                Ok(Some(ClientFlowEvent::CommandSent { handle, command }))
-            }
-            Some(SendCommandEvent::CommandAuthenticate { handle }) => {
-                Ok(Some(ClientFlowEvent::AuthenticateStarted { handle }))
-            }
-            Some(SendCommandEvent::CommandIdle { handle }) => {
-                Ok(Some(ClientFlowEvent::IdleCommandSent { handle }))
-            }
-            Some(SendCommandEvent::IdleDone { handle }) => {
-                Ok(Some(ClientFlowEvent::IdleDoneSent { handle }))
-            }
-            None => Ok(None),
-        }
+        // match self.send_command_state.progress(&mut self.stream).await? {
+        //     Some(SendCommandEvent::Command { handle, command }) => {
+        //         Ok(Some(ClientFlowEvent::CommandSent { handle, command }))
+        //     }
+        //     Some(SendCommandEvent::CommandAuthenticate { handle }) => {
+        //         Ok(Some(ClientFlowEvent::AuthenticateStarted { handle }))
+        //     }
+        //     Some(SendCommandEvent::CommandIdle { handle }) => {
+        //         Ok(Some(ClientFlowEvent::IdleCommandSent { handle }))
+        //     }
+        //     Some(SendCommandEvent::IdleDone { handle }) => {
+        //         Ok(Some(ClientFlowEvent::IdleDoneSent { handle }))
+        //     }
+        //     None => Ok(None),
+        // }
+        todo!()
     }
 
     async fn progress_receive(&mut self) -> Result<Option<ClientFlowEvent>, ClientFlowError> {
-        let event = loop {
-            let response = match self
-                .receive_response_state
-                .progress(&mut self.stream)
-                .await?
-            {
-                ReceiveEvent::DecodingSuccess(response) => {
-                    self.receive_response_state.finish_message();
-                    response
-                }
-                ReceiveEvent::DecodingFailure(ResponseDecodeError::LiteralFound { length }) => {
-                    // The client must accept the literal in any case.
-                    self.receive_response_state.start_literal(length);
-                    continue;
-                }
-                ReceiveEvent::DecodingFailure(
-                    ResponseDecodeError::Failed | ResponseDecodeError::Incomplete,
-                ) => {
-                    let discarded_bytes = self.receive_response_state.discard_message();
-                    return Err(ClientFlowError::MalformedMessage {
-                        discarded_bytes: Secret::new(discarded_bytes),
-                    });
-                }
-                ReceiveEvent::ExpectedCrlfGotLf => {
-                    let discarded_bytes = self.receive_response_state.discard_message();
-                    return Err(ClientFlowError::ExpectedCrlfGotLf {
-                        discarded_bytes: Secret::new(discarded_bytes),
-                    });
-                }
-            };
+        // let event = loop {
+        //     let response = match self
+        //         .receive_response_state
+        //         .progress(&mut self.stream)
+        //         .await?
+        //     {
+        //         ReceiveEvent::DecodingSuccess(response) => {
+        //             self.receive_response_state.finish_message();
+        //             response
+        //         }
+        //         ReceiveEvent::DecodingFailure(ResponseDecodeError::LiteralFound { length }) => {
+        //             // The client must accept the literal in any case.
+        //             self.receive_response_state.start_literal(length);
+        //             continue;
+        //         }
+        //         ReceiveEvent::DecodingFailure(
+        //             ResponseDecodeError::Failed | ResponseDecodeError::Incomplete,
+        //         ) => {
+        //             let discarded_bytes = self.receive_response_state.discard_message();
+        //             return Err(ClientFlowError::MalformedMessage {
+        //                 discarded_bytes: Secret::new(discarded_bytes),
+        //             });
+        //         }
+        //         ReceiveEvent::ExpectedCrlfGotLf => {
+        //             let discarded_bytes = self.receive_response_state.discard_message();
+        //             return Err(ClientFlowError::ExpectedCrlfGotLf {
+        //                 discarded_bytes: Secret::new(discarded_bytes),
+        //             });
+        //         }
+        //     };
 
-            match response {
-                Response::Status(status) => {
-                    let event = if let Some(finish_result) =
-                        self.send_command_state.maybe_remove(&status)
-                    {
-                        match finish_result {
-                            SendCommandTermination::LiteralRejected { handle, command } => {
-                                ClientFlowEvent::CommandRejected {
-                                    handle,
-                                    command,
-                                    status,
-                                }
-                            }
-                            SendCommandTermination::AuthenticateAccepted {
-                                handle,
-                                command_authenticate,
-                            }
-                            | SendCommandTermination::AuthenticateRejected {
-                                handle,
-                                command_authenticate,
-                            } => ClientFlowEvent::AuthenticateStatusReceived {
-                                handle,
-                                command_authenticate,
-                                status,
-                            },
-                            SendCommandTermination::IdleRejected { handle } => {
-                                ClientFlowEvent::IdleRejected { handle, status }
-                            }
-                        }
-                    } else {
-                        ClientFlowEvent::StatusReceived { status }
-                    };
+        //     match response {
+        //         Response::Status(status) => {
+        //             let event = if let Some(finish_result) =
+        //                 self.send_command_state.maybe_remove(&status)
+        //             {
+        //                 match finish_result {
+        //                     SendCommandTermination::LiteralRejected { handle, command } => {
+        //                         ClientFlowEvent::CommandRejected {
+        //                             handle,
+        //                             command,
+        //                             status,
+        //                         }
+        //                     }
+        //                     SendCommandTermination::AuthenticateAccepted {
+        //                         handle,
+        //                         command_authenticate,
+        //                     }
+        //                     | SendCommandTermination::AuthenticateRejected {
+        //                         handle,
+        //                         command_authenticate,
+        //                     } => ClientFlowEvent::AuthenticateStatusReceived {
+        //                         handle,
+        //                         command_authenticate,
+        //                         status,
+        //                     },
+        //                     SendCommandTermination::IdleRejected { handle } => {
+        //                         ClientFlowEvent::IdleRejected { handle, status }
+        //                     }
+        //                 }
+        //             } else {
+        //                 ClientFlowEvent::StatusReceived { status }
+        //             };
 
-                    break Some(event);
-                }
-                Response::Data(data) => break Some(ClientFlowEvent::DataReceived { data }),
-                Response::CommandContinuationRequest(continuation_request) => {
-                    if self.send_command_state.literal_continue() {
-                        // We received a continuation request that was necessary for sending a command.
-                        // So we abort receiving responses for now and continue with sending commands.
-                        break None;
-                    } else if let Some(handle) = self.send_command_state.authenticate_continue() {
-                        break Some(ClientFlowEvent::AuthenticateContinuationRequestReceived {
-                            handle,
-                            continuation_request,
-                        });
-                    } else if let Some(handle) = self.send_command_state.idle_continue() {
-                        break Some(ClientFlowEvent::IdleAccepted {
-                            handle,
-                            continuation_request,
-                        });
-                    } else {
-                        break Some(ClientFlowEvent::ContinuationRequestReceived {
-                            continuation_request,
-                        });
-                    }
-                }
-            }
-        };
+        //             break Some(event);
+        //         }
+        //         Response::Data(data) => break Some(ClientFlowEvent::DataReceived { data }),
+        //         Response::CommandContinuationRequest(continuation_request) => {
+        //             if self.send_command_state.literal_continue() {
+        //                 // We received a continuation request that was necessary for sending a command.
+        //                 // So we abort receiving responses for now and continue with sending commands.
+        //                 break None;
+        //             } else if let Some(handle) = self.send_command_state.authenticate_continue() {
+        //                 break Some(ClientFlowEvent::AuthenticateContinuationRequestReceived {
+        //                     handle,
+        //                     continuation_request,
+        //                 });
+        //             } else if let Some(handle) = self.send_command_state.idle_continue() {
+        //                 break Some(ClientFlowEvent::IdleAccepted {
+        //                     handle,
+        //                     continuation_request,
+        //                 });
+        //             } else {
+        //                 break Some(ClientFlowEvent::ContinuationRequestReceived {
+        //                     continuation_request,
+        //                 });
+        //             }
+        //         }
+        //     }
+        // };
 
-        Ok(event)
+        // Ok(event)
+        todo!()
     }
 
     pub fn set_authenticate_data(
