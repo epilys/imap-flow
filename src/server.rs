@@ -1,6 +1,5 @@
 use std::{
-    fmt::{Debug, Formatter},
-    future::pending,
+    fmt::{Debug, Formatter}, future::pending, io::{Read, Write}
 };
 
 use bytes::BytesMut;
@@ -71,41 +70,45 @@ impl Debug for ServerFlow {
 }
 
 impl ServerFlow {
-    pub async fn send_greeting(
-        mut stream: AnyStream,
-        options: ServerFlowOptions,
-        greeting: Greeting<'static>,
-    ) -> Result<(Self, Greeting<'static>), ServerFlowError> {
-        // Send greeting
-        let write_buffer = BytesMut::new();
-        let mut send_greeting_state =
-            SendResponseState::new(GreetingCodec::default(), write_buffer);
-        send_greeting_state.enqueue(None, greeting);
-        let greeting = loop {
-            if let Some(SendResponseEvent { response, handle }) =
-                send_greeting_state.progress(&mut stream).await?
-            {
-                assert_eq!(handle, None);
-                break response;
-            }
-        };
-
-        // Successfully sent greeting, construct instance
-        let write_buffer = send_greeting_state.finish();
-        let send_response_state = SendResponseState::new(ResponseCodec::default(), write_buffer);
-        let read_buffer = BytesMut::new();
-        let receive_command_state =
-            ReceiveState::new(CommandCodec::default(), options.crlf_relaxed, read_buffer);
-        let server_flow = Self {
-            stream,
-            options,
-            handle_generator: HANDLE_GENERATOR_GENERATOR.generate(),
-            send_response_state,
-            receive_command_state: ServerReceiveState::Command(receive_command_state),
-        };
-
-        Ok((server_flow, greeting))
+    pub fn new(options: ServerFlowOptions) -> Self {
+        todo!()
     }
+
+    // pub async fn send_greeting(
+    //     mut stream: AnyStream,
+    //     options: ServerFlowOptions,
+    //     greeting: Greeting<'static>,
+    // ) -> Result<(Self, Greeting<'static>), ServerFlowError> {
+    //     // Send greeting
+    //     let write_buffer = BytesMut::new();
+    //     let mut send_greeting_state =
+    //         SendResponseState::new(GreetingCodec::default(), write_buffer);
+    //     send_greeting_state.enqueue(None, greeting);
+    //     let greeting = loop {
+    //         if let Some(SendResponseEvent { response, handle }) =
+    //             send_greeting_state.progress(&mut stream).await?
+    //         {
+    //             assert_eq!(handle, None);
+    //             break response;
+    //         }
+    //     };
+
+    //     // Successfully sent greeting, construct instance
+    //     let write_buffer = send_greeting_state.finish();
+    //     let send_response_state = SendResponseState::new(ResponseCodec::default(), write_buffer);
+    //     let read_buffer = BytesMut::new();
+    //     let receive_command_state =
+    //         ReceiveState::new(CommandCodec::default(), options.crlf_relaxed, read_buffer);
+    //     let server_flow = Self {
+    //         stream,
+    //         options,
+    //         handle_generator: HANDLE_GENERATOR_GENERATOR.generate(),
+    //         send_response_state,
+    //         receive_command_state: ServerReceiveState::Command(receive_command_state),
+    //     };
+
+    //     Ok((server_flow, greeting))
+    // }
 
     /// Enqueues the [`Data`] response for being sent to the client.
     ///
@@ -148,7 +151,15 @@ impl ServerFlow {
         handle
     }
 
-    pub async fn progress(&mut self) -> Result<ServerFlowEvent, ServerFlowError> {
+    pub fn read(&mut self, reader: &mut dyn Read) {
+        todo!()
+    }
+
+    pub fn write(&mut self, writer: &mut dyn Write) {
+        todo!()
+    }
+
+    pub fn progress(&mut self) -> Result<ServerFlowAction, ServerFlowError> {
         // The server must do two things:
         // - Sending responses to the client.
         // - Receiving commands from the client.
@@ -545,7 +556,17 @@ impl Debug for ServerFlowResponseHandle {
 }
 
 #[derive(Debug)]
+pub enum ServerFlowAction {
+    ReadBytes,
+    SendBytes,
+    HandleEvent(ServerFlowEvent)
+}
+
+#[derive(Debug)]
 pub enum ServerFlowEvent {
+    GreetingSend {
+        greeting: Greeting<'static>,
+    },
     /// Enqueued [`Response`] was sent successfully.
     ResponseSent {
         /// Handle of the formerly enqueued [`Response`].

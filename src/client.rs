@@ -1,6 +1,6 @@
-use std::fmt::{Debug, Formatter};
+use std::{fmt::{Debug, Formatter}, io::{Read, Write}};
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use imap_codec::{
     decode::{GreetingDecodeError, ResponseDecodeError},
     AuthenticateDataCodec, CommandCodec, GreetingCodec, IdleDoneCodec, ResponseCodec,
@@ -41,7 +41,6 @@ impl Default for ClientFlowOptions {
 }
 
 pub struct ClientFlow {
-    stream: AnyStream,
     handle_generator: HandleGenerator<ClientFlowCommandHandle>,
     send_command_state: SendCommandState,
     receive_response_state: ReceiveState<ResponseCodec>,
@@ -56,58 +55,62 @@ impl Debug for ClientFlow {
 }
 
 impl ClientFlow {
-    pub async fn receive_greeting(
-        mut stream: AnyStream,
-        options: ClientFlowOptions,
-    ) -> Result<(Self, Greeting<'static>), ClientFlowError> {
-        // Receive greeting.
-        let mut receive_greeting_state = ReceiveState::new(
-            GreetingCodec::default(),
-            options.crlf_relaxed,
-            BytesMut::new(),
-        );
-
-        let greeting = match receive_greeting_state.progress(&mut stream).await? {
-            ReceiveEvent::DecodingSuccess(greeting) => {
-                receive_greeting_state.finish_message();
-                greeting
-            }
-            ReceiveEvent::DecodingFailure(
-                GreetingDecodeError::Failed | GreetingDecodeError::Incomplete,
-            ) => {
-                let discarded_bytes = receive_greeting_state.discard_message();
-                return Err(ClientFlowError::MalformedMessage {
-                    discarded_bytes: Secret::new(discarded_bytes),
-                });
-            }
-            ReceiveEvent::ExpectedCrlfGotLf => {
-                let discarded_bytes = receive_greeting_state.discard_message();
-                return Err(ClientFlowError::ExpectedCrlfGotLf {
-                    discarded_bytes: Secret::new(discarded_bytes),
-                });
-            }
-        };
-
-        // Create state to send commands ...
-        let send_command_state = SendCommandState::new(
-            CommandCodec::default(),
-            AuthenticateDataCodec::default(),
-            IdleDoneCodec::default(),
-            BytesMut::new(),
-        );
-
-        // ..., and state to receive responses.
-        let receive_response_state = receive_greeting_state.change_codec(ResponseCodec::new());
-
-        let client_flow = Self {
-            stream,
-            handle_generator: HANDLE_GENERATOR_GENERATOR.generate(),
-            send_command_state,
-            receive_response_state,
-        };
-
-        Ok((client_flow, greeting))
+    pub fn new(options: ClientFlowOptions) -> Self {
+        todo!()
     }
+
+    // pub async fn receive_greeting(
+    //     mut stream: AnyStream,
+    //     options: ClientFlowOptions,
+    // ) -> Result<(Self, Greeting<'static>), ClientFlowError> {
+    //     // Receive greeting.
+    //     let mut receive_greeting_state = ReceiveState::new(
+    //         GreetingCodec::default(),
+    //         options.crlf_relaxed,
+    //         BytesMut::new(),
+    //     );
+
+    //     let greeting = match receive_greeting_state.progress(&mut stream).await? {
+    //         ReceiveEvent::DecodingSuccess(greeting) => {
+    //             receive_greeting_state.finish_message();
+    //             greeting
+    //         }
+    //         ReceiveEvent::DecodingFailure(
+    //             GreetingDecodeError::Failed | GreetingDecodeError::Incomplete,
+    //         ) => {
+    //             let discarded_bytes = receive_greeting_state.discard_message();
+    //             return Err(ClientFlowError::MalformedMessage {
+    //                 discarded_bytes: Secret::new(discarded_bytes),
+    //             });
+    //         }
+    //         ReceiveEvent::ExpectedCrlfGotLf => {
+    //             let discarded_bytes = receive_greeting_state.discard_message();
+    //             return Err(ClientFlowError::ExpectedCrlfGotLf {
+    //                 discarded_bytes: Secret::new(discarded_bytes),
+    //             });
+    //         }
+    //     };
+
+    //     // Create state to send commands ...
+    //     let send_command_state = SendCommandState::new(
+    //         CommandCodec::default(),
+    //         AuthenticateDataCodec::default(),
+    //         IdleDoneCodec::default(),
+    //         BytesMut::new(),
+    //     );
+
+    //     // ..., and state to receive responses.
+    //     let receive_response_state = receive_greeting_state.change_codec(ResponseCodec::new());
+
+    //     let client_flow = Self {
+    //         stream,
+    //         handle_generator: HANDLE_GENERATOR_GENERATOR.generate(),
+    //         send_command_state,
+    //         receive_response_state,
+    //     };
+
+    //     Ok((client_flow, greeting))
+    // }
 
     /// Enqueues the [`Command`] for being sent to the client.
     ///
@@ -120,7 +123,15 @@ impl ClientFlow {
         handle
     }
 
-    pub async fn progress(&mut self) -> Result<ClientFlowEvent, ClientFlowError> {
+    pub fn read(&mut self, reader: &mut dyn Read) {
+        todo!()
+    }
+
+    pub fn write(&mut self, writer: &mut dyn Write) {
+        todo!()
+    }
+
+    pub fn progress(&mut self) -> Result<ClientFlowAction, ClientFlowError> {
         // The client must do two things:
         // - Sending commands to the server.
         // - Receiving responses from the server.
@@ -312,7 +323,17 @@ impl Debug for ClientFlowCommandHandle {
 }
 
 #[derive(Debug)]
+pub enum ClientFlowAction {
+    ReadBytes,
+    SendBytes,
+    HandleEvent(ClientFlowEvent),
+}
+
+#[derive(Debug)]
 pub enum ClientFlowEvent {
+    GreetingReceived {
+        greeting: Greeting<'static>,
+    },
     /// Enqueued [`Command`] successfully sent.
     CommandSent {
         /// Handle to the enqueued [`Command`].
@@ -386,8 +407,6 @@ pub enum ClientFlowEvent {
 
 #[derive(Debug, Error)]
 pub enum ClientFlowError {
-    #[error(transparent)]
-    Stream(#[from] StreamError),
     #[error("Expected `\\r\\n`, got `\\n`")]
     ExpectedCrlfGotLf { discarded_bytes: Secret<Box<[u8]>> },
     #[error("Received malformed message")]
